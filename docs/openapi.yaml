@@ -1,0 +1,261 @@
+openapi: 3.0.3
+info:
+  title: Concert Reservation API
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+
+paths:
+  /concerts/dates:
+    get:
+      summary: 예약 가능한 날짜 목록 조회
+      tags: [Concert]
+      responses:
+        '200':
+          description: 예약 가능한 날짜 목록
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  dates:
+                    type: array
+                    items:
+                      type: string
+                      format: date
+
+  /concerts/dates/{date}/seats:
+    get:
+      summary: 날짜별 좌석 정보 조회
+      tags: [Concert]
+      parameters:
+        - name: date
+          in: path
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: 해당 날짜의 좌석 상태
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  date:
+                    type: string
+                    format: date
+                  seats:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SeatDto'
+
+  /reservations:
+    post:
+      summary: 좌석 예약 요청 (임시 배정)
+      tags: [Reservation]
+      security:
+        - QueueTokenAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                date:
+                  type: string
+                  format: date
+                seatNumber:
+                  type: integer
+                  minimum: 1
+                  maximum: 50
+              required: [date, seatNumber]
+      responses:
+        '201':
+          description: 예약 임시 배정 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservationHoldResponse'
+
+  /wallets/charge:
+    post:
+      summary: 포인트 충전
+      tags: [Wallet]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                userId:
+                  type: string
+                  format: uuid
+                amount:
+                  type: integer
+                  minimum: 1
+              required: [userId, amount]
+      responses:
+        '200':
+          description: 충전 완료 후 잔액
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletDto'
+
+  /wallets/{userId}:
+    get:
+      summary: 사용자 포인트 조회
+      tags: [Wallet]
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 포인트 잔액 조회
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletDto'
+
+  /payments:
+    post:
+      summary: 결제 처리
+      tags: [Payment]
+      security:
+        - QueueTokenAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reservationId:
+                  type: string
+                  format: uuid
+              required: [reservationId]
+      responses:
+        '201':
+          description: 결제 완료
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResponse'
+
+  /queue/tokens:
+    post:
+      summary: 대기열 토큰 발급
+      tags: [Queue]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                userId:
+                  type: string
+                  format: uuid
+              required: [userId]
+      responses:
+        '201':
+          description: 발급된 대기열 토큰
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueueTokenDto'
+
+  /queue/tokens/{token}:
+    get:
+      summary: 대기열 상태 조회
+      tags: [Queue]
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 대기열 상태
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueueStatusDto'
+
+components:
+  securitySchemes:
+    QueueTokenAuth:
+      type: apiKey
+      in: header
+      name: X-QUEUE-TOKEN
+
+  schemas:
+    SeatDto:
+      type: object
+      properties:
+        seatNumber:
+          type: integer
+        status:
+          type: string
+          enum: [AVAILABLE, HELD, SOLD]
+    ReservationHoldResponse:
+      type: object
+      properties:
+        reservationId:
+          type: string
+          format: uuid
+        expiresAt:
+          type: string
+          format: date-time
+    WalletDto:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+        balance:
+          type: integer
+    PaymentResponse:
+      type: object
+      properties:
+        paymentId:
+          type: string
+          format: uuid
+        reservationId:
+          type: string
+          format: uuid
+        amount:
+          type: integer
+    QueueTokenDto:
+      type: object
+      properties:
+        token:
+          type: string
+        position:
+          type: integer
+        status:
+          type: string
+          enum: [PENDING, ACTIVE]
+        estimatedWaitSeconds:
+          type: integer
+    QueueStatusDto:
+      type: object
+      properties:
+        token:
+          type: string
+        position:
+          type: integer
+        status:
+          type: string
+          enum: [PENDING, ACTIVE, EXPIRED]
+        remainingSeconds:
+          type: integer
